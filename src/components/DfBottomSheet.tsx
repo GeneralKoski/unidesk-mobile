@@ -1,15 +1,17 @@
 import { useAppTheme } from "@/src/components/ThemeContext";
 import { Text } from "@/src/components/ui";
-import { useTranslation } from "@/src/hooks/useTranslation";
-import { MAX_WEB_WIDTH, theme } from "@/src/styles";
+import { theme } from "@/src/styles";
 import {
   BottomSheetBackdrop,
+  BottomSheetFooter,
   BottomSheetModal,
   BottomSheetScrollView,
+  BottomSheetView,
 } from "@gorhom/bottom-sheet";
 import { X } from "lucide-react-native";
 import React, { forwardRef, useCallback, useEffect, useState } from "react";
 import {
+  BackHandler,
   Dimensions,
   Keyboard,
   Platform,
@@ -26,18 +28,59 @@ interface DfBottomSheetProps {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
   onDismiss?: () => void;
+  // Contenuto fisso (non scrollabile) quando false. Default: scrollabile.
+  scrollable?: boolean;
+  // Stile "action sheet" iOS: sfondo trasparente, contenuto in una card e
+  // footer (es. "Annulla") in una card staccata sotto. Implica non scrollabile.
+  detached?: boolean;
+  footer?: React.ReactNode;
+  // Spazio extra sotto il contenuto, sommato alla safe-area inferiore (default 16).
+  bottomPadding?: number;
+  // Intercetta il back Android quando lo sheet è aperto (tasto o swipe predittivo).
+  // Se ritorna true il back è gestito internamente (es. torna dalla sotto-schermata)
+  // e lo sheet resta aperto; se ritorna false lo sheet viene chiuso.
+  onAndroidBack?: () => boolean;
 }
 
 export const DfBottomSheet = forwardRef<BottomSheetModal, DfBottomSheetProps>(
-  ({ title, children, style, onDismiss }, ref) => {
+  (
+    {
+      title,
+      children,
+      style,
+      onDismiss,
+      scrollable = true,
+      detached,
+      footer,
+      bottomPadding = 16,
+      onAndroidBack,
+    },
+    ref,
+  ) => {
     const { colors } = useAppTheme();
     const insets = useSafeAreaInsets();
-    const { t } = useTranslation();
+    const isIOS = Platform.OS === "ios";
     const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+    const [isOpen, setIsOpen] = useState(false);
+
+    const dismiss = useCallback(() => {
+      if (typeof ref === "object" && ref?.current) ref.current.dismiss();
+    }, [ref]);
+
+    // Gestione del back Android mentre lo sheet è aperto: senza questo il tasto
+    // indietro / lo swipe predittivo raggiungerebbero react-navigation facendo il
+    // pop della schermata sottostante invece di chiudere lo sheet.
+    useEffect(() => {
+      if (!isOpen) return;
+      const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+        if (onAndroidBack?.()) return true;
+        dismiss();
+        return true;
+      });
+      return () => sub.remove();
+    }, [isOpen, onAndroidBack, dismiss]);
 
     useEffect(() => {
-      if (Platform.OS === "web") return;
-
       const showSub = Keyboard.addListener("keyboardDidShow", () =>
         setIsKeyboardOpen(true),
       );
@@ -62,24 +105,34 @@ export const DfBottomSheet = forwardRef<BottomSheetModal, DfBottomSheetProps>(
       [],
     );
 
-    const safeBottomInset = insets.bottom + 16;
+    const safeBottomInset = insets.bottom + bottomPadding;
+
+    // Footer sticky (fisso in basso, il contenuto scrolla sotto). Usato dai
+    // drawer filtri per tenere sempre visibili Reimposta/Applica.
+    const [footerHeight, setFooterHeight] = useState(0);
+    const hasStickyFooter = !detached && !!footer;
+
+    const renderFooter = useCallback(
+      (props: any) => (
+        <BottomSheetFooter {...props} bottomInset={0}>
+          <View
+            onLayout={(e) => setFooterHeight(e.nativeEvent.layout.height)}
+            style={[styles.stickyFooter, { paddingBottom: safeBottomInset }]}
+          >
+            {footer}
+          </View>
+        </BottomSheetFooter>
+      ),
+      [footer, safeBottomInset],
+    );
 
     const header = (
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
-        <Pressable
-          onPress={() => {
-            if (typeof ref === "object" && ref?.current) {
-              ref.current.dismiss();
-            }
-          }}
-        >
+        <Pressable onPress={dismiss}>
           {({ pressed }) => (
             <View style={[styles.closeButton, pressed && { opacity: 0.75 }]}>
-              <X size={16} color={colors.text} />
-              <Text style={[styles.closeLabel, { color: colors.text }]}>
-                {t("close")}
-              </Text>
+              <X size={24} color={colors.text} />
             </View>
           )}
         </Pressable>
@@ -89,34 +142,64 @@ export const DfBottomSheet = forwardRef<BottomSheetModal, DfBottomSheetProps>(
     return (
       <BottomSheetModal
         ref={ref}
-        enableDynamicSizing={!isKeyboardOpen}
+        // iOS: NON commutare enableDynamicSizing/snapPoints al variare della
+        // tastiera (rimonterebbe lo sheet a ogni show/hide -> loop "su e giù").
+        // Dynamic sizing sempre attivo, la tastiera è gestita da keyboardBehavior.
+        // Android: mantiene il toggle (con adjustResize non innesca il loop).
+        enableDynamicSizing={isIOS ? true : !isKeyboardOpen}
         maxDynamicContentSize={MAX_SHEET_HEIGHT}
-        snapPoints={isKeyboardOpen ? ["88%"] : undefined}
+        snapPoints={!isIOS && isKeyboardOpen ? ["88%"] : undefined}
         keyboardBehavior="extend"
         keyboardBlurBehavior="restore"
         android_keyboardInputMode="adjustResize"
+        onChange={(index) => setIsOpen(index >= 0)}
         onDismiss={() => {
+          setIsOpen(false);
           Keyboard.dismiss();
           onDismiss?.();
         }}
         backdropComponent={renderBackdrop}
-        backgroundStyle={{ backgroundColor: theme.colors.white }}
+        backgroundStyle={
+          detached
+            ? { backgroundColor: "transparent" }
+            : { backgroundColor: theme.colors.white }
+        }
+        handleComponent={detached ? null : undefined}
         handleIndicatorStyle={{ backgroundColor: colors.border }}
-        {...(Platform.OS === "web" && {
-          containerStyle: {
-            maxWidth: MAX_WEB_WIDTH,
-            marginHorizontal: "auto",
-          },
-        })}
+        footerComponent={hasStickyFooter ? renderFooter : undefined}
       >
-        <BottomSheetScrollView
-          style={[styles.content, style]}
-          keyboardShouldPersistTaps="handled"
-        >
-          {title && header}
-          {children}
-          {!isKeyboardOpen && <View style={{ height: safeBottomInset }} />}
-        </BottomSheetScrollView>
+        {detached ? (
+          <BottomSheetView style={styles.detachedWrap}>
+            <View style={[styles.detachedCard, style]}>
+              {title && header}
+              {children}
+            </View>
+            {footer ? (
+              <View style={styles.detachedFooter}>{footer}</View>
+            ) : null}
+            <View style={{ height: safeBottomInset }} />
+          </BottomSheetView>
+        ) : scrollable ? (
+          <BottomSheetScrollView
+            style={[styles.content, style]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {title && header}
+            {children}
+            {hasStickyFooter ? (
+              <View style={{ height: footerHeight }} />
+            ) : !isKeyboardOpen ? (
+              <View style={{ height: safeBottomInset }} />
+            ) : null}
+          </BottomSheetScrollView>
+        ) : (
+          <BottomSheetView style={[styles.content, style]}>
+            {title && header}
+            {children}
+            <View style={{ height: safeBottomInset }} />
+          </BottomSheetView>
+        )}
       </BottomSheetModal>
     );
   },
@@ -130,11 +213,30 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: theme.spacing.md,
   },
+  detachedWrap: {
+    paddingHorizontal: theme.spacing.sm,
+  },
+  detachedCard: {
+    backgroundColor: theme.colors.white,
+    borderRadius: theme.radius.xl,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
+  },
+  detachedFooter: {
+    backgroundColor: theme.colors.white,
+    borderRadius: theme.radius.xl,
+    marginTop: theme.spacing.sm,
+    overflow: "hidden",
+  },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: theme.spacing.lg,
+  },
+  stickyFooter: {
+    backgroundColor: theme.colors.white,
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
   },
   title: {
     fontSize: 24,
@@ -144,10 +246,5 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-  },
-  closeLabel: {
-    fontSize: 14,
-    fontWeight: "500",
-    includeFontPadding: false,
   },
 });

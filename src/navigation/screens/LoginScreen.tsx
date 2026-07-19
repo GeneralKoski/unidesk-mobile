@@ -7,7 +7,7 @@ import { Text } from "@/src/components/ui";
 import { useTranslation } from "@/src/hooks/useTranslation";
 import { useAuthStore } from "@/src/stores/authStore";
 import { theme } from "@/src/styles";
-import { GraduationCap } from "lucide-react-native";
+import { Image } from "expo-image";
 import React, { useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { StyleSheet, View } from "react-native";
@@ -42,9 +42,11 @@ export function LoginScreen() {
     >
       <FormScreen contentContainerStyle={styles.scroll}>
         <View style={styles.brand}>
-          <View style={styles.logo}>
-            <GraduationCap size={30} color={theme.colors.white} />
-          </View>
+          <Image
+            source={require("@/assets/images/icon.png")}
+            style={styles.logo}
+            contentFit="contain"
+          />
           <Text style={styles.brandName}>Unidesk</Text>
         </View>
 
@@ -100,12 +102,8 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.xl,
   },
   logo: {
-    width: 64,
-    height: 64,
-    borderRadius: theme.radius.xl,
-    backgroundColor: theme.colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
+    width: 72,
+    height: 72,
     marginBottom: theme.spacing.sm,
   },
   brandName: {

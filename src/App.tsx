@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
 
+import { ExitConfirm } from "@/src/components/ExitConfirm";
 import { ThemeProvider } from "@/src/components/ThemeContext";
 import { NavigationWrapper } from "@/src/navigation/NavigationWrapper";
 import { useAuthStore } from "@/src/stores/authStore";
@@ -53,6 +54,7 @@ export function App() {
             <BottomSheetModalProvider>
               <View style={styles.container}>
                 <NavigationWrapper />
+                <ExitConfirm />
                 <Toast />
               </View>
             </BottomSheetModalProvider>
