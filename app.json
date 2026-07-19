@@ -2,21 +2,18 @@
   "expo": {
     "name": "Unidesk",
     "slug": "unidesk-mobile",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "unidesk",
     "userInterfaceStyle": "light",
     "ios": {
-      "icon": "./assets/expo.icon",
       "bundleIdentifier": "tech.dieffe.unidesk"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F0FF",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#ffffff",
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "tech.dieffe.unidesk"
@@ -28,9 +25,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#1677ff",
+          "backgroundColor": "#ffffff",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 180,
+          "imageWidth": 200,
           "fade": true
         }
       ],
