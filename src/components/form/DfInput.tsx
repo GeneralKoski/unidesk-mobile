@@ -39,11 +39,12 @@ export const DfInput = ({
         name={name}
         rules={rules}
         render={({
-          field: { onChange, onBlur, value },
+          field: { onChange, onBlur, value, ref },
           fieldState: { error },
         }) => (
           <>
             <TextInput
+              ref={ref}
               value={value ?? ""}
               onChangeText={onChange}
               onBlur={onBlur}

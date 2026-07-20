@@ -15,6 +15,7 @@ import {
   StyleSheet,
   View,
   ViewStyle,
+  type ReturnKeyTypeOptions,
 } from "react-native";
 
 interface DfPasswordProps {
@@ -23,6 +24,8 @@ interface DfPasswordProps {
   placeholder?: string;
   rules?: RegisterOptions;
   wrapperStyle?: StyleProp<ViewStyle>;
+  returnKeyType?: ReturnKeyTypeOptions;
+  onSubmitEditing?: () => void;
 }
 
 export const DfPassword = ({
@@ -31,6 +34,8 @@ export const DfPassword = ({
   placeholder,
   rules,
   wrapperStyle,
+  returnKeyType,
+  onSubmitEditing,
 }: DfPasswordProps) => {
   const [visible, setVisible] = useState(false);
   const { control } = useFormContext();
@@ -48,15 +53,18 @@ export const DfPassword = ({
         name={name}
         rules={rules}
         render={({
-          field: { onChange, onBlur, value },
+          field: { onChange, onBlur, value, ref },
           fieldState: { error },
         }) => (
           <>
             <View style={styles.inputContainer}>
               <TextInput
+                ref={ref}
                 value={value ?? ""}
                 onChangeText={onChange}
                 onBlur={onBlur}
+                returnKeyType={returnKeyType}
+                onSubmitEditing={onSubmitEditing}
                 placeholder={placeholder ?? t("default_input_placeholder")}
                 placeholderTextColor={theme.colors.gray400}
                 secureTextEntry={!visible}

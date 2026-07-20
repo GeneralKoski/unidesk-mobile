@@ -8,9 +8,9 @@ import { useTranslation } from "@/src/hooks/useTranslation";
 import { useAuthStore } from "@/src/stores/authStore";
 import { theme } from "@/src/styles";
 import { Image } from "expo-image";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
-import { StyleSheet, View } from "react-native";
+import { Keyboard, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 interface LoginFormValues {
@@ -24,17 +24,46 @@ export function LoginScreen() {
   const { t } = useTranslation();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const submitting = useRef(false);
 
   const form = useForm<LoginFormValues>({ mode: "onSubmit" });
 
-  const onSubmit = async (values: LoginFormValues) => {
-    setError(null);
-    setLoading(true);
-    const res = await login(values.email.trim(), values.password);
-    setLoading(false);
-    if (!res.ok) setError(res.error);
-    // In caso di successo il redirect è gestito da NavigationWrapper.
-  };
+  const doLogin = useCallback(
+    async (email: string, password: string) => {
+      if (submitting.current) return;
+      submitting.current = true;
+      setError(null);
+      setLoading(true);
+      const res = await login(email.trim(), password);
+      setLoading(false);
+      submitting.current = false;
+      if (!res.ok) setError(res.error);
+      // In caso di successo il redirect è gestito da NavigationWrapper.
+    },
+    [login],
+  );
+
+  const submit = form.handleSubmit((v) => doLogin(v.email, v.password));
+
+  // Autologin quando il gestore password compila email + password in un colpo
+  // solo (l'autofill riempie i campi con più caratteri insieme, non uno a uno).
+  useEffect(() => {
+    const prevLen = { email: 0, password: 0 };
+    const sub = form.watch((values, { name }) => {
+      const email = values.email ?? "";
+      const password = values.password ?? "";
+      const jumped =
+        (name === "email" && email.length - prevLen.email > 1) ||
+        (name === "password" && password.length - prevLen.password > 1);
+      prevLen.email = email.length;
+      prevLen.password = password.length;
+      if (jumped && email.trim() && password) {
+        Keyboard.dismiss();
+        doLogin(email, password);
+      }
+    });
+    return () => sub.unsubscribe();
+  }, [form, doLogin]);
 
   return (
     <SafeAreaView
@@ -69,18 +98,26 @@ export function LoginScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
+            autoComplete="username"
+            textContentType="username"
+            importantForAutofill="yes"
+            returnKeyType="next"
+            submitBehavior="submit"
+            onSubmitEditing={() => form.setFocus("password")}
             rules={{ required: t("email_required") }}
           />
           <DfPassword
             name="password"
             label={t("password")}
+            returnKeyType="go"
+            onSubmitEditing={submit}
             rules={{ required: t("password_required") }}
           />
           <DfButton
             label={t("login")}
             color={theme.colors.primary}
             loading={loading}
-            onPress={form.handleSubmit(onSubmit)}
+            onPress={submit}
           />
         </FormProvider>
 
