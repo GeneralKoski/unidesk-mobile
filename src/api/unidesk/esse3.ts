@@ -1,4 +1,5 @@
 import { ESSE3_BASE } from "@/src/consts";
+import { decodeEntitiesDeep } from "@/src/utils/html";
 import type {
   Appello,
   AppelloConStato,
@@ -76,7 +77,7 @@ export class Esse3Client {
       }
       throw new Error(msg);
     }
-    return (text ? JSON.parse(text) : null) as T;
+    return (text ? decodeEntitiesDeep(JSON.parse(text)) : null) as T;
   }
 
   login(): Promise<LoginResp> {
