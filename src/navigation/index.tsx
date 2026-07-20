@@ -17,6 +17,7 @@ import { CorsiScreen } from "@/src/navigation/screens/CorsiScreen";
 import { CorsoDetailScreen } from "@/src/navigation/screens/CorsoDetailScreen";
 import { EsameDetailScreen } from "@/src/navigation/screens/EsameDetailScreen";
 import { EsamiScreen } from "@/src/navigation/screens/EsamiScreen";
+import { FileViewerScreen } from "@/src/navigation/screens/FileViewerScreen";
 import { HomeScreen } from "@/src/navigation/screens/HomeScreen";
 import { LoginScreen } from "@/src/navigation/screens/LoginScreen";
 
@@ -91,6 +92,10 @@ const RootStack = createNativeStackNavigator({
       linking: { path: "corso/:id" },
       options: { presentation: "card" },
     },
+    FileViewer: {
+      screen: FileViewerScreen,
+      options: { presentation: "fullScreenModal" },
+    },
   },
 });
 
@@ -113,11 +118,18 @@ export interface CorsoDetailParams {
   nome: string;
 }
 
+export interface FileViewerParams {
+  uri: string;
+  kind: "pdf" | "image";
+  name: string;
+}
+
 declare global {
   namespace ReactNavigation {
     interface RootParamList extends RootStackParamList {
       EsameDetail: EsameDetailParams;
       CorsoDetail: CorsoDetailParams;
+      FileViewer: FileViewerParams;
     }
   }
 }

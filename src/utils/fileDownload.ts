@@ -21,12 +21,13 @@ function safeName(name: string): string {
 }
 
 // Scarica un materiale Elly tramite il proxy del backend (che usa la sessione
-// Moodle server-side) e lo apre nel foglio di condivisione del sistema. Il fetch
-// riusa il cookie jar nativo di RN, la stessa sessione backend di ellyApi.
-export async function downloadEllyFile(
+// Moodle server-side) e lo salva nella cache. Il fetch riusa il cookie jar
+// nativo di RN, la stessa sessione backend di ellyApi. Ritorna il path locale
+// (file://) e il content-type della risposta.
+export async function downloadEllyFileToCache(
   fileUrl: string,
   filename: string,
-): Promise<void> {
+): Promise<{ uri: string; contentType: string }> {
   await ellyApi.ensureSession();
 
   const res = await fetch(fileUrl, {
@@ -36,6 +37,7 @@ export async function downloadEllyFile(
   if (!res.ok) {
     throw new Error(`Download fallito (HTTP ${res.status})`);
   }
+  const contentType = res.headers.get("content-type") ?? "";
   const blob = await res.blob();
   const base64 = await blobToBase64(blob);
 
@@ -43,9 +45,18 @@ export async function downloadEllyFile(
   await FileSystem.writeAsStringAsync(target, base64, {
     encoding: FileSystem.EncodingType.Base64,
   });
+  return { uri: target, contentType };
+}
+
+// Scarica e apre il file nel foglio di condivisione del sistema.
+export async function downloadEllyFile(
+  fileUrl: string,
+  filename: string,
+): Promise<void> {
+  const { uri } = await downloadEllyFileToCache(fileUrl, filename);
 
   if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(target);
+    await Sharing.shareAsync(uri);
   } else {
     logger.info("[fileDownload] Sharing non disponibile su questa piattaforma");
     throw new Error("Condivisione non disponibile");

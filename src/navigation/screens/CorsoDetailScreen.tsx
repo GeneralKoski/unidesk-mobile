@@ -3,7 +3,14 @@ import { ellyApi } from "@/src/api/unidesk/elly";
 import type { CorsoDetailParams } from "@/src/navigation";
 import { Card, Text } from "@/src/components/ui";
 import { EmptyView, ErrorView, LoadingView } from "@/src/components/StateViews";
-import { downloadEllyFile } from "@/src/utils/fileDownload";
+import { downloadEllyFile, downloadEllyFileToCache } from "@/src/utils/fileDownload";
+import {
+  fileCategory,
+  fileExtLabel,
+  isInAppViewable,
+  type FileCategory,
+  type FileMeta,
+} from "@/src/utils/fileType";
 import { useTranslation } from "@/src/hooks/useTranslation";
 import { showToast } from "@/src/utils/toast";
 import { theme } from "@/src/styles";
@@ -13,8 +20,14 @@ import {
   ChevronDown,
   ChevronRight,
   File as FileIcon,
+  FileArchive,
+  FileImage,
+  FileSpreadsheet,
+  FileText,
   Folder,
   Link as LinkIcon,
+  Presentation,
+  type LucideIcon,
 } from "lucide-react-native";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -27,12 +40,41 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+function fileIcon(cat: FileCategory): { Icon: LucideIcon; color: string } {
+  switch (cat) {
+    case "pdf":
+      return { Icon: FileText, color: "#dc2626" };
+    case "image":
+      return { Icon: FileImage, color: "#7c3aed" };
+    case "word":
+      return { Icon: FileText, color: "#2563eb" };
+    case "excel":
+      return { Icon: FileSpreadsheet, color: "#16a34a" };
+    case "ppt":
+      return { Icon: Presentation, color: "#ea580c" };
+    case "archive":
+      return { Icon: FileArchive, color: theme.colors.gray600 };
+    case "text":
+      return { Icon: FileText, color: theme.colors.gray600 };
+    default:
+      return { Icon: FileIcon, color: theme.colors.primary };
+  }
+}
+
+interface OpenOpts {
+  modname?: string;
+  filename?: string;
+  mimetype?: string;
+}
+
 function useFileOpen() {
   const { t } = useTranslation();
+  const navigation = useNavigation<any>();
   const [busy, setBusy] = useState(false);
 
   const open = useCallback(
-    async (url: string, name: string, modname?: string) => {
+    async (url: string, name: string, opts: OpenOpts = {}) => {
+      const { modname, filename, mimetype } = opts;
       // "url" (link esterni) e attività interattive: apri nel browser.
       if (modname && modname !== "resource" && modname !== "folder") {
         Linking.openURL(url).catch(() => {
@@ -40,9 +82,19 @@ function useFileOpen() {
         });
         return;
       }
+      const cat = fileCategory({ filename, mimetype, name, url });
+      const fileUrl = ellyApi.fileUrl(url, modname);
+      const displayName = filename ?? name;
       setBusy(true);
       try {
-        await downloadEllyFile(ellyApi.fileUrl(url, modname), name);
+        if (isInAppViewable(cat)) {
+          // PDF e immagini: scarica in cache e apri nel viewer in-app.
+          const { uri } = await downloadEllyFileToCache(fileUrl, displayName);
+          navigation.navigate("FileViewer", { uri, kind: cat, name: displayName });
+        } else {
+          // Altri formati: scarica e passa al foglio di condivisione.
+          await downloadEllyFile(fileUrl, displayName);
+        }
       } catch (err) {
         showToast.error({
           message: err instanceof Error ? err.message : String(err),
@@ -51,10 +103,43 @@ function useFileOpen() {
         setBusy(false);
       }
     },
-    [t],
+    [navigation, t],
   );
 
   return { open, busy };
+}
+
+function FileRow({
+  name,
+  meta,
+  onPress,
+  disabled,
+  nested,
+}: {
+  name: string;
+  meta: FileMeta;
+  onPress: () => void;
+  disabled: boolean;
+  nested?: boolean;
+}) {
+  const cat = fileCategory(meta);
+  const { Icon, color } = fileIcon(cat);
+  const ext = fileExtLabel(meta);
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.6}
+      disabled={disabled}
+      style={[styles.moduleRow, nested && styles.nested]}
+    >
+      <Icon size={18} color={color} />
+      <Text style={styles.moduleName} numberOfLines={2}>
+        {name}
+      </Text>
+      {ext ? <Text style={styles.ext}>{ext}</Text> : null}
+    </TouchableOpacity>
+  );
 }
 
 function FolderItem({ m }: { m: Module }) {
@@ -112,18 +197,14 @@ function FolderItem({ m }: { m: Module }) {
           </Text>
         ) : (
           files?.map((f) => (
-            <TouchableOpacity
+            <FileRow
               key={f.url}
+              name={f.name}
+              meta={{ name: f.name, url: f.url }}
               onPress={() => open(f.url, f.name)}
-              activeOpacity={0.6}
               disabled={busy}
-              style={[styles.moduleRow, styles.nested]}
-            >
-              <FileIcon size={18} color={theme.colors.primary} />
-              <Text style={styles.moduleName} numberOfLines={2}>
-                {f.name}
-              </Text>
-            </TouchableOpacity>
+              nested
+            />
           ))
         )
       ) : null}
@@ -136,9 +217,15 @@ function ModuleItem({ m }: { m: Module }) {
   if (m.modname === "folder") return <FolderItem m={m} />;
 
   const isFile = m.modname === "resource";
-  const Icon = isFile ? FileIcon : LinkIcon;
+  const meta: FileMeta = {
+    filename: m.filename,
+    mimetype: m.mimetype,
+    name: m.name,
+    url: m.url,
+  };
 
   if (!m.url) {
+    const Icon = isFile ? FileIcon : LinkIcon;
     return (
       <View style={styles.moduleRow}>
         <Icon size={18} color={theme.colors.gray400} />
@@ -147,24 +234,39 @@ function ModuleItem({ m }: { m: Module }) {
     );
   }
 
+  // Risorsa file: icona per tipo. Link/altro: icona link.
+  if (!isFile) {
+    return (
+      <TouchableOpacity
+        onPress={() => open(m.url!, m.name, { modname: m.modname })}
+        activeOpacity={0.6}
+        disabled={busy}
+        style={styles.moduleRow}
+      >
+        <LinkIcon size={18} color={theme.colors.gray600} />
+        <Text style={styles.moduleName} numberOfLines={2}>
+          {m.name}
+        </Text>
+        {busy ? (
+          <ActivityIndicator size="small" color={theme.colors.primary} />
+        ) : null}
+      </TouchableOpacity>
+    );
+  }
+
   return (
-    <TouchableOpacity
-      onPress={() => open(m.url!, m.name, m.modname)}
-      activeOpacity={0.6}
+    <FileRow
+      name={m.name}
+      meta={meta}
+      onPress={() =>
+        open(m.url!, m.name, {
+          modname: m.modname,
+          filename: m.filename,
+          mimetype: m.mimetype,
+        })
+      }
       disabled={busy}
-      style={styles.moduleRow}
-    >
-      <Icon
-        size={18}
-        color={isFile ? theme.colors.primary : theme.colors.gray600}
-      />
-      <Text style={styles.moduleName} numberOfLines={2}>
-        {m.name}
-      </Text>
-      {busy ? (
-        <ActivityIndicator size="small" color={theme.colors.primary} />
-      ) : null}
-    </TouchableOpacity>
+    />
   );
 }
 
@@ -270,6 +372,11 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     color: theme.colors.gray800,
+  },
+  ext: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: theme.colors.gray400,
   },
   nested: {
     marginLeft: theme.spacing.lg,
