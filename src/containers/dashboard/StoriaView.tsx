@@ -1,6 +1,6 @@
-import { Badge, Card, Segmented, Text } from "@/src/components/ui";
+import { Badge, Card, Text } from "@/src/components/ui";
 import { MediaChart } from "@/src/containers/dashboard/MediaChart";
-import type { HistoryStat, SortBy } from "@/src/containers/dashboard/stats";
+import type { HistoryStat } from "@/src/containers/dashboard/stats";
 import { useTranslation } from "@/src/hooks/useTranslation";
 import { theme } from "@/src/styles";
 import { ArrowDown, ArrowUp, Minus } from "lucide-react-native";
@@ -23,14 +23,10 @@ export function StoriaView({
   historyStats,
   selectedIndex,
   onSelect,
-  sortBy,
-  onSortByChange,
 }: {
   historyStats: HistoryStat[];
   selectedIndex: number | null;
   onSelect: (index: number | null) => void;
-  sortBy: SortBy;
-  onSortByChange: (s: SortBy) => void;
 }) {
   const { t } = useTranslation();
 
@@ -81,21 +77,7 @@ export function StoriaView({
         </Card>
       ) : null}
 
-      <Card
-        title={t("timeline_titolo")}
-        right={
-          <View style={styles.sortToggle}>
-            <Segmented<SortBy>
-              options={[
-                { label: t("sort_ricezione"), value: "dataRicezione" },
-                { label: t("sort_esame"), value: "dataEsa" },
-              ]}
-              value={sortBy}
-              onChange={onSortByChange}
-            />
-          </View>
-        }
-      >
+      <Card title={t("timeline_titolo")}>
         {historyStats
           .map((item, idx) => ({ item, idx }))
           .reverse()
@@ -208,9 +190,6 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     fontWeight: "500",
     marginTop: theme.spacing.xs,
-  },
-  sortToggle: {
-    width: 180,
   },
   row: {
     flexDirection: "row",

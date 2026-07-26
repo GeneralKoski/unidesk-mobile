@@ -10,7 +10,6 @@ import {
   computeTargetProjection,
   sortedHistory,
   type MockExam,
-  type SortBy,
 } from "@/src/containers/dashboard/stats";
 import { StoriaView } from "@/src/containers/dashboard/StoriaView";
 import { SimulatoreView } from "@/src/containers/dashboard/SimulatoreView";
@@ -47,6 +46,36 @@ function StatTile({ label, value }: { label: string; value: string }) {
   );
 }
 
+function ProgressTile({
+  label,
+  done,
+  total,
+  cfuLabel,
+}: {
+  label: string;
+  done: number;
+  total: number;
+  cfuLabel: string;
+}) {
+  const pct = total > 0 ? Math.min(100, (done / total) * 100) : 0;
+  return (
+    <View style={[styles.statTile, styles.progressTile]}>
+      <View style={styles.progressCounters}>
+        <Text style={styles.progressLabel} numberOfLines={2}>
+          {label}
+        </Text>
+        <Text style={styles.progressValue}>
+          {done}/{total}
+        </Text>
+        <Text style={styles.progressCfu}>({cfuLabel})</Text>
+      </View>
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: `${pct}%` }]} />
+      </View>
+    </View>
+  );
+}
+
 export function HomeScreen() {
   const { t, language } = useTranslation();
   const navigation = useNavigation<any>();
@@ -70,12 +99,13 @@ export function HomeScreen() {
 
   // Stato viste dashboard / storia / simulatore.
   const [viewMode, setViewMode] = useState<ViewMode>("dashboard");
-  const [sortBy, setSortBy] = useState<SortBy>("dataRicezione");
   const [selectedHistoryIndex, setSelectedHistoryIndex] = useState<number | null>(
     null,
   );
   const [mockExams, setMockExams] = useState<MockExam[]>([]);
   const [targetScore, setTargetScore] = useState(110);
+  const [puntiInCorso, setPuntiInCorso] = useState(0);
+  const [puntiTesi, setPuntiTesi] = useState(0);
 
   useEffect(() => {
     loadCareers();
@@ -131,14 +161,8 @@ export function HomeScreen() {
   const stats = libretto?.stats;
   const superate = useMemo(() => libretto?.superate ?? [], [libretto]);
 
-  const history = useMemo(
-    () => sortedHistory(superate, sortBy),
-    [superate, sortBy],
-  );
-  const historyStats = useMemo(
-    () => computeHistoryStats(history, sortBy),
-    [history, sortBy],
-  );
+  const history = useMemo(() => sortedHistory(superate), [superate]);
+  const historyStats = useMemo(() => computeHistoryStats(history), [history]);
   const simulatedStats = useMemo(
     () => computeSimulatedStats(superate, mockExams),
     [superate, mockExams],
@@ -150,12 +174,20 @@ export function HomeScreen() {
         targetScore,
         mockExams,
         simulatedStats.mediaPonderata,
+        puntiInCorso + puntiTesi,
       ),
-    [stats, targetScore, mockExams, simulatedStats.mediaPonderata],
+    [
+      stats,
+      targetScore,
+      mockExams,
+      simulatedStats.mediaPonderata,
+      puntiInCorso,
+      puntiTesi,
+    ],
   );
   const gradeDistribution = useMemo(
-    () => computeGradeDistribution(superate),
-    [superate],
+    () => computeGradeDistribution(superate, mockExams),
+    [superate, mockExams],
   );
 
   const dsRows: RigaDaSostenere[] = useMemo(
@@ -308,13 +340,11 @@ export function HomeScreen() {
                 label={t("voto_partenza") + simulato}
                 value={currentStats.voto.toFixed(2)}
               />
-              <StatTile
-                label={t("cfu_acquisiti") + simulato}
-                value={String(currentStats.cfu)}
-              />
-              <StatTile
+              <ProgressTile
                 label={t("esami_superati") + simulato}
-                value={`${currentStats.esami}/${totEsami}`}
+                done={currentStats.esami}
+                total={totEsami}
+                cfuLabel={t("cfu_n", { n: currentStats.cfu })}
               />
             </View>
 
@@ -323,8 +353,6 @@ export function HomeScreen() {
                 historyStats={historyStats}
                 selectedIndex={selectedHistoryIndex}
                 onSelect={setSelectedHistoryIndex}
-                sortBy={sortBy}
-                onSortByChange={setSortBy}
               />
             ) : viewMode === "simulatore" ? (
               <SimulatoreView
@@ -336,6 +364,10 @@ export function HomeScreen() {
                 }
                 targetScore={targetScore}
                 onTargetChange={setTargetScore}
+                puntiInCorso={puntiInCorso}
+                onPuntiInCorsoChange={setPuntiInCorso}
+                puntiTesi={puntiTesi}
+                onPuntiTesiChange={setPuntiTesi}
                 projection={projection}
                 gradeDistribution={gradeDistribution}
               />
@@ -468,5 +500,41 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 12,
     color: theme.colors.gray500,
+  },
+  progressTile: {
+    flexBasis: "100%",
+    gap: theme.spacing.sm,
+  },
+  progressCounters: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.sm,
+  },
+  progressLabel: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "600",
+    color: theme.colors.gray800,
+  },
+  progressValue: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: theme.colors.primary,
+  },
+  progressCfu: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: theme.colors.gray600,
+  },
+  progressTrack: {
+    height: 8,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.gray100,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.primary,
   },
 });

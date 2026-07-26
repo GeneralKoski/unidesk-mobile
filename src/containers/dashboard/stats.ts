@@ -3,8 +3,6 @@ import type { LibrettoStats, RigaLibretto } from "@/src/api/unidesk/types";
 // Calcoli della dashboard (storia media, simulatore, proiezioni laurea),
 // portati 1:1 dalla web app. Funzioni pure: nessuna dipendenza da React.
 
-export type SortBy = "dataRicezione" | "dataEsa";
-
 export interface MockExam {
   id: string;
   adDes: string;
@@ -34,6 +32,7 @@ export interface TargetProjection {
   achievable: boolean;
   neededAvg?: number;
   message: string;
+  votoPrevisto: string;
 }
 
 export interface GradeDistribution {
@@ -41,12 +40,7 @@ export interface GradeDistribution {
   maxCount: number;
 }
 
-function getExamDate(r: RigaLibretto, type: SortBy): string {
-  if (type === "dataRicezione") {
-    return (
-      r.esito.dataVerb || r.dataIns || r.esito.dataPubb || r.esito.dataEsa || ""
-    );
-  }
+function getExamDate(r: RigaLibretto): string {
   return r.esito.dataEsa || "";
 }
 
@@ -58,22 +52,16 @@ function parseDateString(dStr: string | undefined): number {
   return isNaN(parsed) ? 0 : parsed;
 }
 
-export function sortedHistory(
-  superate: RigaLibretto[],
-  sortBy: SortBy,
-): RigaLibretto[] {
+export function sortedHistory(superate: RigaLibretto[]): RigaLibretto[] {
   return [...superate].sort((a, b) => {
-    const da = parseDateString(getExamDate(a, sortBy));
-    const db = parseDateString(getExamDate(b, sortBy));
+    const da = parseDateString(getExamDate(a));
+    const db = parseDateString(getExamDate(b));
     if (da !== db) return da - db;
     return a.adDes.localeCompare(b.adDes);
   });
 }
 
-export function computeHistoryStats(
-  history: RigaLibretto[],
-  sortBy: SortBy,
-): HistoryStat[] {
+export function computeHistoryStats(history: RigaLibretto[]): HistoryStat[] {
   const list: HistoryStat[] = [];
   let totalVotiPesati = 0;
   let totalCFUConVoto = 0;
@@ -99,7 +87,7 @@ export function computeHistoryStats(
 
     list.push({
       exam,
-      date: getExamDate(exam, sortBy)?.slice(0, 10) || "N/D",
+      date: getExamDate(exam)?.slice(0, 10) || "N/D",
       mediaPonderata,
       votoPartenza,
       cfuAcquisiti: totalCFU,
@@ -140,11 +128,17 @@ export function computeSimulatedStats(
   };
 }
 
+/** Etichetta del voto di laurea: oltre 110 diventa 110 e lode. */
+function formatVotoLaurea(voto: number): string {
+  return voto > 110 ? "110L" : voto.toFixed(2);
+}
+
 export function computeTargetProjection(
   stats: LibrettoStats | undefined,
   targetScore: number,
   mockExams: MockExam[],
   simulatedMedia: number,
+  bonusPoints: number,
 ): TargetProjection | null {
   if (!stats) return null;
 
@@ -156,15 +150,28 @@ export function computeTargetProjection(
   const effectiveRealCfu = realCfu + mockCfu;
   const effectiveRealMedia = simulatedMedia;
 
+  // I punti bonus (laurea in corso + tesi) si sommano al voto di partenza,
+  // quindi abbassano il voto di partenza che serve raggiungere con gli esami.
+  const baseTarget = targetScore - bonusPoints;
+  const bonusNota =
+    bonusPoints > 0 ? ` (inclusi ${bonusPoints} punti bonus)` : "";
+  const votoPrevisto = formatVotoLaurea(
+    (effectiveRealMedia / 30) * 110 + bonusPoints,
+  );
+
   if (effectiveRemainingCfu <= 0) {
+    const finale = (effectiveRealMedia / 30) * 110 + bonusPoints;
+    const raggiunto = finale >= targetScore;
     return {
-      achievable: true,
-      message:
-        "Obiettivo raggiunto: hai simulato il completamento di tutti i CFU rimanenti.",
+      achievable: raggiunto,
+      votoPrevisto,
+      message: raggiunto
+        ? `Obiettivo raggiunto: con tutti i CFU completati arrivi a ${formatVotoLaurea(finale)}${bonusNota}.`
+        : `Obiettivo mancato: con tutti i CFU completati arrivi a ${formatVotoLaurea(finale)}${bonusNota}.`,
     };
   }
 
-  const targetAvg = (targetScore * 30) / 110;
+  const targetAvg = (baseTarget * 30) / 110;
   const totalCfu = effectiveRealCfu + effectiveRemainingCfu;
   const neededAvg =
     (targetAvg * totalCfu - effectiveRealMedia * effectiveRealCfu) /
@@ -174,34 +181,43 @@ export function computeTargetProjection(
     return {
       achievable: true,
       neededAvg,
-      message: `Obiettivo garantito: ti basta una media di 18,00 (o idoneità) nei restanti ${effectiveRemainingCfu} CFU.`,
+      votoPrevisto,
+      message: `Obiettivo garantito: ti basta una media di 18,00 (o idoneità) nei restanti ${effectiveRemainingCfu} CFU${bonusNota}.`,
     };
   }
   if (neededAvg > 30) {
     return {
       achievable: false,
       neededAvg,
-      message: `Non raggiungibile: richiederebbe una media di ${neededAvg.toFixed(2)} nei restanti ${effectiveRemainingCfu} CFU.`,
+      votoPrevisto,
+      message: `Non raggiungibile: richiederebbe una media di ${neededAvg.toFixed(2)} nei restanti ${effectiveRemainingCfu} CFU${bonusNota}.`,
     };
   }
   return {
     achievable: true,
     neededAvg,
-    message: `Raggiungibile con una media di ${neededAvg.toFixed(2)} nei restanti ${effectiveRemainingCfu} CFU.`,
+    votoPrevisto,
+    message: `Raggiungibile con una media di ${neededAvg.toFixed(2)} nei restanti ${effectiveRemainingCfu} CFU${bonusNota}.`,
   };
 }
 
 export function computeGradeDistribution(
   superate: RigaLibretto[],
+  mockExams: MockExam[],
 ): GradeDistribution {
   const distribution: Record<string, number> = {};
   for (let g = 18; g <= 30; g++) distribution[String(g)] = 0;
   distribution["30L"] = 0;
 
+  const voti = [
+    ...superate.map((r) => ({ voto: r.esito.voto, lode: r.esito.lode })),
+    ...mockExams.map((m) => ({ voto: m.voto, lode: m.lode })),
+  ];
+
   let maxCount = 0;
-  for (const r of superate) {
-    if (r.esito.voto == null) continue;
-    const key = r.esito.voto === 30 && r.esito.lode ? "30L" : String(r.esito.voto);
+  for (const r of voti) {
+    if (r.voto == null) continue;
+    const key = r.voto === 30 && r.lode ? "30L" : String(r.voto);
     distribution[key] = (distribution[key] || 0) + 1;
     if (distribution[key] > maxCount) maxCount = distribution[key];
   }

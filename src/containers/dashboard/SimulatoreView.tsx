@@ -20,6 +20,42 @@ export interface AvailableExam {
 
 const VOTI = [18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30];
 const TARGETS = Array.from({ length: 45 }, (_, i) => 110 - i); // 110..66
+const PUNTI_IN_CORSO = [0, 1, 2, 3];
+const PUNTI_TESI = [0, 1, 2, 3, 4, 5, 6, 7];
+
+function NumberChips({
+  values,
+  value,
+  onChange,
+}: {
+  values: number[];
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.chipRow}
+    >
+      {values.map((v) => {
+        const active = value === v;
+        return (
+          <TouchableOpacity
+            key={v}
+            onPress={() => onChange(v)}
+            activeOpacity={0.6}
+            style={[styles.votoChip, active && styles.chipActive]}
+          >
+            <Text style={[styles.chipText, active && styles.chipTextActive]}>
+              {v}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
+  );
+}
 
 export function SimulatoreView({
   available,
@@ -28,6 +64,10 @@ export function SimulatoreView({
   onRemove,
   targetScore,
   onTargetChange,
+  puntiInCorso,
+  onPuntiInCorsoChange,
+  puntiTesi,
+  onPuntiTesiChange,
   projection,
   gradeDistribution,
 }: {
@@ -37,6 +77,10 @@ export function SimulatoreView({
   onRemove: (id: string) => void;
   targetScore: number;
   onTargetChange: (score: number) => void;
+  puntiInCorso: number;
+  onPuntiInCorsoChange: (p: number) => void;
+  puntiTesi: number;
+  onPuntiTesiChange: (p: number) => void;
   projection: TargetProjection | null;
   gradeDistribution: GradeDistribution;
 }) {
@@ -184,27 +228,26 @@ export function SimulatoreView({
 
       <Card title={t("proiezioni_laurea")}>
         <Text style={styles.fieldLabel}>{t("voto_laurea_desiderato")}</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipRow}
-        >
-          {TARGETS.map((v) => {
-            const active = targetScore === v;
-            return (
-              <TouchableOpacity
-                key={v}
-                onPress={() => onTargetChange(v)}
-                activeOpacity={0.6}
-                style={[styles.votoChip, active && styles.chipActive]}
-              >
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                  {v}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+        <NumberChips
+          values={TARGETS}
+          value={targetScore}
+          onChange={onTargetChange}
+        />
+
+        <Text style={styles.fieldLabel}>{t("punti_laurea_in_corso")}</Text>
+        <NumberChips
+          values={PUNTI_IN_CORSO}
+          value={puntiInCorso}
+          onChange={onPuntiInCorsoChange}
+        />
+
+        <Text style={styles.fieldLabel}>{t("punti_tesi")}</Text>
+        <NumberChips
+          values={PUNTI_TESI}
+          value={puntiTesi}
+          onChange={onPuntiTesiChange}
+        />
+
         {projection ? (
           <View
             style={[
@@ -220,6 +263,9 @@ export function SimulatoreView({
             ]}
           >
             <Text style={styles.projText}>{projection.message}</Text>
+            <Text style={styles.projVoto}>
+              {t("voto_laurea_previsto")}: {projection.votoPrevisto}
+            </Text>
           </View>
         ) : (
           <Text style={styles.meta}>{t("proiezione_non_disponibile")}</Text>
@@ -320,5 +366,11 @@ const styles = StyleSheet.create({
   projText: {
     fontSize: 14,
     color: theme.colors.gray800,
+  },
+  projVoto: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: theme.colors.gray900,
+    marginTop: theme.spacing.xs,
   },
 });
