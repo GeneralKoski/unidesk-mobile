@@ -1,107 +1,75 @@
-# Unidesk mobile
+# unidesk mobile
 
-App nativa (React Native + Expo) di [Unidesk](../unidesk): carriera, libretto,
-media ponderata, prenotazione appelli e corsi/materiali Elly, in un'unica app per
-studenti Unipr. Adattamento mobile della web app, con **floating navbar** a 3
-sezioni: Home (dashboard), Esami, Corsi.
+The mobile client for [unidesk](https://github.com/GeneralKoski/unidesk):
+academic record, weighted average, exam booking, and course materials, in one
+app. Three sections behind a custom floating navbar: Home, Exams, Courses.
 
-## Architettura
+The split between what runs on the device and what needs a server is the point of
+the architecture. Esse3 is called directly from the device, because its internal
+REST API takes stateless HTTP Basic auth and works fine from React Native. Elly
+is not reachable that way: the Shibboleth SSO login and the file proxy cannot be
+reproduced on-device with `fetch`, so the Courses tab goes through the unidesk web
+backend. Without a backend configured, that tab shows a "configure backend" state
+and everything else keeps working.
 
-L'app è pensata per essere **self-contained** dove conta:
+## Stack
 
-- **Esse3 direttamente da device.** Login, carriera, libretto, media/CFU, appelli
-  e prenotazione/disiscrizione usano l'API REST `e3rest` in HTTP Basic Auth
-  (stateless), chiamata direttamente dall'app. Le credenziali Unipr restano
-  cifrate sul dispositivo (`expo-secure-store`). Nessun backend necessario per
-  queste funzioni.
-- **Elly tramite backend Unidesk (opzionale).** Il login SSO Shibboleth e il
-  proxy dei materiali girano server-side e non sono replicabili on-device con
-  `fetch` di React Native. La tab **Corsi** riusa quindi le API route della web
-  app (`../unidesk/web`). Se `EXPO_PUBLIC_API_URL` non è impostato, la tab Corsi
-  mostra uno stato "configura backend" e il resto dell'app funziona comunque.
+- React Native 0.83, Expo 55, React 19, TypeScript, New Architecture enabled
+- Targets iOS 15.1+, Android SDK 24+, and web
+- React Navigation 7 (static API) with a custom floating tab bar
+- Zustand for state, `expo-secure-store` for the credentials on device
+- `react-hook-form` for forms, `react-native-svg` for charts, i18n-js for Italian and English
 
-```
-App (RN/Expo)
- ├─ Esse3Client  ── HTTP Basic ─────────────▶ Esse3 e3rest (diretto)
- └─ ellyApi      ── cookie sessione ────────▶ Unidesk web (Next.js) ──▶ Elly (Moodle SSO)
-```
+Credentials are held encrypted in `expo-secure-store` and validated against
+Esse3 at login. Booking and cancelling an exam always ask for explicit
+confirmation.
 
-## Configurazione
+The Home tab has three views behind a segmented control: a dashboard, a history
+view with an exam timeline and a running-average chart, and a simulator that
+projects graduation marks over the remaining credits.
 
-Copia `.env.example` in `.env`:
-
-```bash
-cp .env.example .env
-```
-
-- `EXPO_PUBLIC_ESSE3_BASE` — base REST Esse3 (default Unipr).
-- `EXPO_PUBLIC_API_URL` — URL del backend Unidesk per i corsi Elly. Default:
-  `https://unidesk.martin-trajkovski.it` (backend pubblico già online, PM2 sul
-  VPS). Con questo l'app funziona **ovunque, solo con internet sul telefono**.
-  In alternativa in sviluppo puoi puntare all'IP LAN del PC che fa girare
-  `npm run web` (es. `http://192.168.1.10:3000`; sull'emulatore Android
-  `localhost` → `10.0.2.2`). Vuoto = tab Corsi disabilitata.
-
-## Sviluppo
+## Running locally
 
 ```bash
 npm install
-npm start            # dev server (richiede un dev build, non Expo Go)
-npm run android      # build + run su device/emulatore Android
-npm run typecheck    # tsc --noEmit
+
+cp .env.example .env
+# EXPO_PUBLIC_ESSE3_BASE  base REST endpoint for Esse3
+# EXPO_PUBLIC_API_URL     unidesk web backend, needed only for the Courses tab
+
+npx expo run:android   # first run, produces the dev build
+npm start              # dev server afterwards
+npm run typecheck
 npm run lint
 ```
 
-> Il template usa `expo-dev-client` (moduli nativi come SecureStore/reanimated):
-> serve un **development build**, Expo Go non basta. La prima volta:
-> `npx expo run:android`.
+This uses `expo-dev-client` because of native modules such as SecureStore and
+reanimated, so a development build is required and Expo Go is not enough.
 
-## Build APK (Android)
-
-Script locale `deploy.sh` (stesso approccio di ZCC/Omnia Marine): bump versione,
-`expo prebuild --clean`, iniezione firma release idempotente, APK firmato e
-versionato in `android/app/build/outputs/apk/release/unidesk-<versione>.apk`.
-
-Prerequisiti (una tantum):
+To build a signed release APK, create a keystore and fill in the gitignored
+`credentials.json`:
 
 ```bash
-# 1) keystore release
 mkdir -p credentials/android
 keytool -genkeypair -v -keystore credentials/android/keystore.jks \
   -alias unidesk -keyalg RSA -keysize 2048 -validity 10000
 
-# 2) credenziali (gitignorate)
 cp credentials.json.example credentials.json
-#    compila keystorePassword / keyPassword / alias
+
+./deploy.sh            # prompts for a version, then builds the APK
+./deploy.sh --no-bump  # keeps the current version from app.json
 ```
 
-Build:
+`android/`, `ios/`, `credentials.json` and `credentials/` are gitignored. The
+`.env` is baked into the bundle at build time.
 
-```bash
-./deploy.sh            # chiede la versione, poi builda l'APK
-./deploy.sh --no-bump  # usa la versione attuale di app.json
-```
+## Status
 
-`android/` e `credentials.json`/`credentials/` sono gitignorati. L'`.env`
-(incluso `EXPO_PUBLIC_API_URL`) viene "congelato" nel bundle a build-time.
+Working on Android, which is the platform it has been built and run on. The iOS
+target is configured but has not been through a device build. The Courses tab
+depends on a reachable unidesk backend; the rest of the app only needs internet
+access.
 
-In alternativa con EAS: `eas build -p android --profile preview`.
-
-## Struttura
-
-- `src/api/unidesk/` — client Esse3 (on-device) ed Elly (via backend) + tipi.
-- `src/stores/` — `authStore` (credenziali in SecureStore), `careerStore`
-  (carriere + matId selezionato), `translationStore`.
-- `src/navigation/` — root stack + tab (floating navbar) e `screens/`.
-- `src/components/` — UI riutilizzabile (`ui/`, `form/`, `FloatingTabBar`,
-  `Screen`, `StateViews`).
-- `src/containers/esami/` — item lista esami (da sostenere / superati).
-
-## Note
-
-- **Scritture con conferma.** Prenotazione e disiscrizione appelli chiedono
-  sempre conferma esplicita. Il blocco questionario OPIS rimanda a Esse3.
-- **Home a 3 viste** (segmented control): Dashboard (statistiche + esami superati
-  + da sostenere), Storia (timeline esami, grafico andamento media selezionabile,
-  impatto per esame) e Simulatore (esami ipotetici, proiezioni di laurea sui CFU
-  rimanenti, distribuzione voti). Grafici con `react-native-svg`.
+The same caveat as the web app applies: the project brokers university passwords
+because neither Esse3 nor Elly issues tokens. It is a personal project, not a
+service meant for other people's accounts.
