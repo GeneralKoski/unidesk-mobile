@@ -65,6 +65,7 @@ interface OpenOpts {
   modname?: string;
   filename?: string;
   mimetype?: string;
+  base?: string;
 }
 
 function useFileOpen() {
@@ -74,7 +75,7 @@ function useFileOpen() {
 
   const open = useCallback(
     async (url: string, name: string, opts: OpenOpts = {}) => {
-      const { modname, filename, mimetype } = opts;
+      const { modname, filename, mimetype, base } = opts;
       // "url" (link esterni) e attività interattive: apri nel browser.
       if (modname && modname !== "resource" && modname !== "folder") {
         Linking.openURL(url).catch(() => {
@@ -83,7 +84,7 @@ function useFileOpen() {
         return;
       }
       const cat = fileCategory({ filename, mimetype, name, url });
-      const fileUrl = ellyApi.fileUrl(url, modname);
+      const fileUrl = ellyApi.fileUrl(url, { base, modname });
       const displayName = filename ?? name;
       setBusy(true);
       try {
@@ -142,7 +143,7 @@ function FileRow({
   );
 }
 
-function FolderItem({ m }: { m: Module }) {
+function FolderItem({ m, base }: { m: Module; base?: string }) {
   const { t } = useTranslation();
   const { open, busy } = useFileOpen();
   const [openState, setOpenState] = useState(false);
@@ -157,7 +158,7 @@ function FolderItem({ m }: { m: Module }) {
     if (files || !m.url) return;
     setLoading(true);
     try {
-      setFiles(await ellyApi.getFolder(m.url));
+      setFiles(await ellyApi.getFolder(m.url, base));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -212,9 +213,9 @@ function FolderItem({ m }: { m: Module }) {
   );
 }
 
-function ModuleItem({ m }: { m: Module }) {
+function ModuleItem({ m, base }: { m: Module; base?: string }) {
   const { open, busy } = useFileOpen();
-  if (m.modname === "folder") return <FolderItem m={m} />;
+  if (m.modname === "folder") return <FolderItem m={m} base={base} />;
 
   const isFile = m.modname === "resource";
   const meta: FileMeta = {
@@ -238,7 +239,7 @@ function ModuleItem({ m }: { m: Module }) {
   if (!isFile) {
     return (
       <TouchableOpacity
-        onPress={() => open(m.url!, m.name, { modname: m.modname })}
+        onPress={() => open(m.url!, m.name, { modname: m.modname, base })}
         activeOpacity={0.6}
         disabled={busy}
         style={styles.moduleRow}
@@ -263,6 +264,7 @@ function ModuleItem({ m }: { m: Module }) {
           modname: m.modname,
           filename: m.filename,
           mimetype: m.mimetype,
+          base,
         })
       }
       disabled={busy}
@@ -281,11 +283,11 @@ export function CorsoDetailScreen() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      setSections(await ellyApi.getContents(params.id));
+      setSections(await ellyApi.getContents(params.id, params.base));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [params.id]);
+  }, [params.id, params.base]);
 
   useEffect(() => {
     load();
@@ -325,7 +327,7 @@ export function CorsoDetailScreen() {
               title={s.name || t("sezione_n", { n: s.section })}
             >
               {s.modules.map((m) => (
-                <ModuleItem key={m.id} m={m} />
+                <ModuleItem key={m.id} m={m} base={params.base} />
               ))}
             </Card>
           ))}

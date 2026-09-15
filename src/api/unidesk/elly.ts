@@ -71,6 +71,10 @@ async function ellyGet<T>(path: string, retry = true): Promise<T> {
   return data as T;
 }
 
+function baseParam(base?: string): string {
+  return base ? `&base=${encodeURIComponent(base)}` : "";
+}
+
 export const ellyApi = {
   // Garantisce la sessione backend (per il download materiali via fetch).
   ensureSession(): Promise<void> {
@@ -80,19 +84,24 @@ export const ellyApi = {
   getCourses(): Promise<Course[]> {
     return ellyGet<Course[]>("/api/elly/courses");
   },
-  getContents(courseid: number | string): Promise<Section[]> {
-    return ellyGet<Section[]>(`/api/elly/contents?courseid=${courseid}`);
+  // "base" e' l'istanza Elly del corso. Omesso, il backend ricade sull'anno
+  // corrente: giusto per i corsi di quest'anno, sbagliato per gli arretrati.
+  getContents(courseid: number | string, base?: string): Promise<Section[]> {
+    return ellyGet<Section[]>(
+      `/api/elly/contents?courseid=${courseid}${baseParam(base)}`,
+    );
   },
-  getFolder(url: string): Promise<{ name: string; url: string }[]> {
+  getFolder(url: string, base?: string): Promise<{ name: string; url: string }[]> {
     return ellyGet<{ name: string; url: string }[]>(
-      `/api/elly/folder?url=${encodeURIComponent(url)}`,
+      `/api/elly/folder?url=${encodeURIComponent(url)}${baseParam(base)}`,
     );
   },
   // URL assoluto del proxy file server-side (apribile in browser/download).
-  fileUrl(url: string, modname?: string): string {
+  fileUrl(url: string, opts: { base?: string; modname?: string } = {}): string {
     return (
       `${API_BASE_URL}/api/elly/file?url=${encodeURIComponent(url)}` +
-      (modname ? `&modname=${encodeURIComponent(modname)}` : "")
+      baseParam(opts.base) +
+      (opts.modname ? `&modname=${encodeURIComponent(opts.modname)}` : "")
     );
   },
 };

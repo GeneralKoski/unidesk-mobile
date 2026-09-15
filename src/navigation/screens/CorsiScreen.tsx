@@ -79,6 +79,7 @@ export function CorsiScreen() {
               navigation.navigate("CorsoDetail", {
                 id: item.id,
                 nome: item.fullname ?? item.shortname,
+                base: item.base,
               })
             }
           >
@@ -89,9 +90,16 @@ export function CorsiScreen() {
               <Text style={styles.courseTitle} numberOfLines={2}>
                 {item.fullname ?? item.shortname}
               </Text>
-              {item.shortname ? (
+              {item.shortname || item.year ? (
                 <Text style={styles.courseSub} numberOfLines={1}>
-                  {item.shortname}
+                  {[
+                    item.shortname,
+                    item.year
+                      ? `${item.year}/${String(item.year + 1).slice(2)}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </Text>
               ) : null}
             </View>

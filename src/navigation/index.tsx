@@ -116,6 +116,8 @@ export interface EsameDetailParams {
 export interface CorsoDetailParams {
   id: number;
   nome: string;
+  // Istanza Elly del corso: gli id sono per-istanza (vedi Course.base).
+  base?: string;
 }
 
 export interface FileViewerParams {

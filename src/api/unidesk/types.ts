@@ -97,6 +97,12 @@ export interface AppelloConStato extends Appello {
 
 export interface Course {
   id: number;
+  // Istanza Elly da cui arriva il corso. Unipr tiene un Moodle per anno
+  // accademico e le iscrizioni non migrano, quindi gli id sono per-istanza:
+  // senza questo, i contenuti di un corso vecchio verrebbero chiesti all'anno
+  // corrente. Opzionale perche' un backend non aggiornato non lo manda.
+  base?: string;
+  year?: number;
   shortname: string;
   fullname: string;
   viewurl?: string;
