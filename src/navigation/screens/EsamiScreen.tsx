@@ -7,10 +7,15 @@ import { useTranslation } from "@/src/hooks/useTranslation";
 import { useAuthStore } from "@/src/stores/authStore";
 import { useCareerStore } from "@/src/stores/careerStore";
 import { theme } from "@/src/styles";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import React, { useCallback, useEffect, useState } from "react";
 import { FlatList, RefreshControl, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+// Card nascoste (es. prova finale, tirocinio: si convalidano, non hanno appelli).
+// Per farle ricomparire si svuota la chiave in AsyncStorage.
+const HIDDEN_KEY = "unidesk:hidden:esami";
 
 export function EsamiScreen() {
   const { t } = useTranslation();
@@ -23,10 +28,23 @@ export function EsamiScreen() {
   const [rows, setRows] = useState<RigaDaSostenere[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [hidden, setHidden] = useState<string[]>([]);
 
   useEffect(() => {
     loadCareers();
   }, [loadCareers]);
+
+  useEffect(() => {
+    AsyncStorage.getItem(HIDDEN_KEY)
+      .then((raw) => setHidden(raw ? (JSON.parse(raw) as string[]) : []))
+      .catch(() => {});
+  }, []);
+
+  const hide = (id: string) => {
+    const next = [...hidden, id];
+    setHidden(next);
+    AsyncStorage.setItem(HIDDEN_KEY, JSON.stringify(next)).catch(() => {});
+  };
 
   const load = useCallback(async () => {
     if (selectedMatId == null) return;
@@ -76,10 +94,17 @@ export function EsamiScreen() {
         <LoadingView />
       ) : (
         <FlatList
-          data={rows}
+          data={rows.filter(
+            (r) => !hidden.includes(String(r.chiaveADContestualizzata.adId)),
+          )}
           keyExtractor={(r) => String(r.chiaveADContestualizzata.adId)}
           renderItem={({ item }) => (
-            <DaSostenereItem riga={item} onPress={() => goToEsame(item)} card />
+            <DaSostenereItem
+              riga={item}
+              onPress={() => goToEsame(item)}
+              onHide={() => hide(String(item.chiaveADContestualizzata.adId))}
+              card
+            />
           )}
           contentContainerStyle={{
             paddingHorizontal: theme.spacing.md,

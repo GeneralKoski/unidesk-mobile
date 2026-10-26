@@ -2,7 +2,7 @@ import type { RigaDaSostenere, RigaLibretto } from "@/src/api/unidesk/types";
 import { Badge, type BadgeTone, Text } from "@/src/components/ui";
 import { useTranslation } from "@/src/hooks/useTranslation";
 import { theme } from "@/src/styles";
-import { ChevronRight } from "lucide-react-native";
+import { ChevronRight, EyeOff } from "lucide-react-native";
 import React from "react";
 import { StyleSheet, TouchableOpacity, View } from "react-native";
 
@@ -34,10 +34,12 @@ function prenotazioneBadge(r: RigaDaSostenere, t: (k: string, o?: Record<string,
 export function DaSostenereItem({
   riga,
   onPress,
+  onHide,
   card = false,
 }: {
   riga: RigaDaSostenere;
   onPress: () => void;
+  onHide?: () => void;
   card?: boolean;
 }) {
   const { t } = useTranslation();
@@ -63,6 +65,16 @@ export function DaSostenereItem({
           ) : null}
         </View>
       </View>
+      {onHide ? (
+        <TouchableOpacity
+          onPress={onHide}
+          hitSlop={10}
+          activeOpacity={0.6}
+          accessibilityLabel={t("nascondi")}
+        >
+          <EyeOff size={18} color={theme.colors.gray400} />
+        </TouchableOpacity>
+      ) : null}
       <ChevronRight size={20} color={theme.colors.gray400} />
     </TouchableOpacity>
   );
